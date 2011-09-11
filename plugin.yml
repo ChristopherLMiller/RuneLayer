@@ -1,0 +1,9 @@
+name: RuneLayer
+main: com.moosemanstudios.Runelayer.RuneLayer
+version: 1.1
+commands:
+    rune:
+        description: enables rune laying use
+permissions:
+    runelayer.rune:
+        description: enables rune laying use
