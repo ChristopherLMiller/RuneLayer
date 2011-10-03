@@ -1,9 +1,13 @@
 name: RuneLayer
 main: com.moosemanstudios.Runelayer.RuneLayer
-version: 1.1
+version: 2.1
 commands:
     rune:
         description: enables rune laying use
 permissions:
     runelayer.rune:
         description: enables rune laying use
+    runelayer.reload:
+        description: reloads the config file
+    runelayer.change:
+        description: enable or disable a world

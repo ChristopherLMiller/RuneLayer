@@ -6,9 +6,12 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -16,14 +19,17 @@ import org.bukkit.event.Event.Priority;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.util.config.Configuration;
 import org.bukkit.event.Event;
 
 public class RuneLayer extends JavaPlugin{
-	Logger log = Logger.getLogger("minecraft");
-	public ArrayList<Player> runePlayers = new ArrayList<Player>();
-	public ArrayList<String> offlinePlayers = new ArrayList<String>();
-	private final RLPlayerListener playerlistener = new RLPlayerListener(this);
-	static String mainDirectory = "plugins/RuneLayer";
+	Logger log = Logger.getLogger("minecraft");	// main plugin logger
+	public ArrayList<Player> runePlayers = new ArrayList<Player>();	// list of players online able to use runelayer
+	public ArrayList<String> offlinePlayers = new ArrayList<String>();	// list of players offline able to use runelayer
+	private final RLPlayerListener playerlistener = new RLPlayerListener(this);	// player listener class
+	static String mainDirectory = "plugins/RuneLayer";	// main directory for config purposes
+	public Configuration conf;	// configuration file for the plugin
+	public ArrayList<String> worlds = new ArrayList<String>();	// list of worlds for the config
 	
 	public void onEnable() {
 		// register the event
@@ -35,6 +41,15 @@ public class RuneLayer extends JavaPlugin{
 		// load list of players with rune layer enabled
 		new File(mainDirectory).mkdir();
 		load_players();
+		
+		// get the config
+		conf = this.getConfiguration();
+		
+		// load the config
+		loadConfig();
+		
+		// reload the config to get the file if it didn't exist
+		reloadConfig();
 		
 		PluginDescriptionFile pdfFile = this.getDescription();
 		log.info("[" + pdfFile.getName() +  "] version " + pdfFile.getVersion() + " is enabled");
@@ -48,23 +63,147 @@ public class RuneLayer extends JavaPlugin{
 	}
 	
 	public boolean onCommand(CommandSender sender, Command cmd, String commandLabel, String[] args) {
-		Player player = (Player) sender;
+		String[] split = args;
+		String commandName = cmd.getName().toLowerCase();
 		
-		// see if they entered the command
-		if (commandLabel.equalsIgnoreCase("rune")) {
-			if (player.hasPermission("runelayer.rune")) {
-				togglePlayer(player);
+		if (commandName.equalsIgnoreCase("rune")) {
+			if (split.length == 0) {
+				sender.sendMessage(ChatColor.RED + "Type " + ChatColor.WHITE + "/rune help" + ChatColor.RED + " for help");
 				return true;
-			} else if (player.isOp()) {
-				togglePlayer(player);
+			}
+			
+			if (split[0].equalsIgnoreCase("help")) {
+				sender.sendMessage(ChatColor.RED + "RuneLayer Help");
+				sender.sendMessage("----------------------------------------");
+				sender.sendMessage(ChatColor.RED + "/rune help" + ChatColor.WHITE + ": Displays this help screen");
+				
+				// display help menu based on user permissions
+				if (sender.hasPermission("runelayer.rune")) {
+					sender.sendMessage(ChatColor.RED + "/rune (enable/disable)" + ChatColor.WHITE + ": Enable/disable rune laying");
+				}
+				if (sender.hasPermission("runelayer.reload")) {
+					sender.sendMessage(ChatColor.RED + "/rune reload" + ChatColor.WHITE + ": Reload RuneLayer config file");
+				}
+				if (sender.hasPermission("runelayer.change")) {
+					sender.sendMessage(ChatColor.RED + "/rune (add/remove) [WORLD]" + ChatColor.WHITE + ": Enable/disable specified world");
+				}
+				
 				return true;
-			} else {
-				player.sendMessage(ChatColor.RED + "You don't have permissions to do that");
-				return false;
+			}
+			
+			if (split[0].equalsIgnoreCase("disable") || split[0].equalsIgnoreCase("enable")) {
+				// this will vary if its the user or the console
+				if (sender instanceof Player) {
+					if (sender.hasPermission("runelayer.rune")) {
+						if (split[0].equalsIgnoreCase("enable")) {
+							if (enabled((Player) sender)) {
+								sender.sendMessage(ChatColor.BLUE + "RuneLayer is enabled");
+							} else {
+								togglePlayer((Player) sender);
+							}
+						} else {
+							if (enabled((Player) sender)) {
+								togglePlayer((Player) sender);
+							} else {
+								sender.sendMessage(ChatColor.BLUE + "RuneLayer is disabled");
+							}
+						}
+					} else {
+						sender.sendMessage(ChatColor.RED + "You don't have permissions to do that!");
+					}
+				} else {
+					sender.sendMessage("You are not a player! I can't allow this.");
+				}
+				return true;
+			}
+			
+			if (split[0].equalsIgnoreCase("reload")) {
+				if (sender.hasPermission("runelayer.reload")) {
+					reloadConfig();
+					sender.sendMessage("RuneLayer config reloaded");
+				} else {
+					sender.sendMessage(ChatColor.RED + "You don't have permissions to do that!");
+				}
+				return true;
+			}
+			
+			if ((split[0].equalsIgnoreCase("add")) || (split[0].equalsIgnoreCase("remove")) ) {
+				// see if they provided a world name
+				if (split.length == 2) {
+					if (sender.hasPermission("runelayer.change")) {
+						if (split[0].equalsIgnoreCase("add")) {
+							// see if the world is in the list already
+							if (worlds.contains(split[1])){
+								sender.sendMessage("World already enabled");
+							} else {
+								worlds.add(split[1]);
+								conf.setProperty("worlds", worlds);
+								conf.save();
+								sender.sendMessage("World added");
+							}
+						} else {
+							if (worlds.contains(split[1])) {
+								worlds.remove(split[1]);
+								conf.setProperty("worlds", worlds);
+								conf.save();
+								sender.sendMessage("World removed");
+							} else {
+								sender.sendMessage("World already disabled");
+							}
+						}
+					} else {
+						sender.sendMessage(ChatColor.RED + "You don't have permissions to do that!");
+					}
+				} else {
+					sender.sendMessage(ChatColor.RED + "World name not provided, use /rune help for more info");
+				}
+				return true;
 			}
 		}
 		
 		return false;
+	}
+	
+	private void reloadConfig() {
+		conf.load();
+		List<Object> worldList = conf.getList("worlds");
+		
+		// wipe the worlds list first
+		worlds.clear();
+		
+		// iterate and add the worlds to the list
+		for (Object world : worldList) {
+			// check that the world actually exists on the server
+			World worldWorld = this.getServer().getWorld(world.toString());
+			if (worldWorld != null) {
+				worlds.add(world.toString());
+				log.info("[RuneLayer] world loaded: " + world.toString());
+			}
+		}
+	}
+	
+	private void loadConfig() {
+		// see if the value exists
+		if (!propertyExists("worlds")) {
+			// query and get list of worlds on the server
+			List<World> tempWorlds = Bukkit.getServer().getWorlds();
+				
+			// add the worlds names to the list
+			for (World world: tempWorlds) {
+				if (world != null) {
+					String name = world.getName();
+					worlds.add(name);
+				}
+			}
+			
+			// save this to the config file
+			conf.setProperty("worlds", worlds);
+		}
+		conf.save();
+	}
+	
+	private boolean propertyExists(String path) {
+		return this.getConfiguration().getProperty(path) != null;
 	}
 	
 	private void load_players() {
@@ -124,11 +263,11 @@ public class RuneLayer extends JavaPlugin{
 	private void togglePlayer(Player player) {
 		if (enabled(player)) {
 			this.runePlayers.remove(player);
-			player.sendMessage(ChatColor.BLUE + "Rune Layer is disabled");
+			player.sendMessage(ChatColor.BLUE + "RuneLayer is disabled");
 			log.info("[Runelayer] disabled for player " + player.getName());
 		} else {
 			this.runePlayers.add(player);
-			player.sendMessage(ChatColor.BLUE + "Rune Layer is enabled");
+			player.sendMessage(ChatColor.BLUE + "RuneLayer is enabled");
 			log.info("[Runelayer] enabled for player " + player.getName());
 		}
 	}
