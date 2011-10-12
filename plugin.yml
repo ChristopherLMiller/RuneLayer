@@ -1,6 +1,6 @@
 name: RuneLayer
 main: com.moosemanstudios.Runelayer.RuneLayer
-version: 2.1
+version: 2.2
 commands:
     rune:
         description: enables rune laying use

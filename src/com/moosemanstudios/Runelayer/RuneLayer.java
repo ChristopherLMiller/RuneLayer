@@ -14,12 +14,12 @@ import org.bukkit.ChatColor;
 import org.bukkit.World;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.Configuration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Event.Priority;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.util.config.Configuration;
 import org.bukkit.event.Event;
 
 public class RuneLayer extends JavaPlugin{
@@ -28,7 +28,7 @@ public class RuneLayer extends JavaPlugin{
 	public ArrayList<String> offlinePlayers = new ArrayList<String>();	// list of players offline able to use runelayer
 	private final RLPlayerListener playerlistener = new RLPlayerListener(this);	// player listener class
 	static String mainDirectory = "plugins/RuneLayer";	// main directory for config purposes
-	public Configuration conf;	// configuration file for the plugin
+	public Configuration config;	// configuration file for the plugin
 	public ArrayList<String> worlds = new ArrayList<String>();	// list of worlds for the config
 	
 	public void onEnable() {
@@ -43,7 +43,7 @@ public class RuneLayer extends JavaPlugin{
 		load_players();
 		
 		// get the config
-		conf = this.getConfiguration();
+		config = this.getConfig();
 		
 		// load the config
 		loadConfig();
@@ -137,15 +137,15 @@ public class RuneLayer extends JavaPlugin{
 								sender.sendMessage("World already enabled");
 							} else {
 								worlds.add(split[1]);
-								conf.setProperty("worlds", worlds);
-								conf.save();
+								config.set("worlds", worlds);
+								saveConfig();
 								sender.sendMessage("World added");
 							}
 						} else {
 							if (worlds.contains(split[1])) {
 								worlds.remove(split[1]);
-								conf.setProperty("worlds", worlds);
-								conf.save();
+								config.set("worlds", worlds);
+								saveConfig();
 								sender.sendMessage("World removed");
 							} else {
 								sender.sendMessage("World already disabled");
@@ -165,45 +165,34 @@ public class RuneLayer extends JavaPlugin{
 	}
 	
 	private void reloadConfig() {
-		conf.load();
-		List<Object> worldList = conf.getList("worlds");
-		
+		@SuppressWarnings("unchecked")
+		List<String> worldList = config.getList("worlds");
 		// wipe the worlds list first
 		worlds.clear();
 		
 		// iterate and add the worlds to the list
-		for (Object world : worldList) {
+		for (String world : worldList) {
 			// check that the world actually exists on the server
-			World worldWorld = this.getServer().getWorld(world.toString());
+			World worldWorld = this.getServer().getWorld(world);
 			if (worldWorld != null) {
-				worlds.add(world.toString());
-				log.info("[RuneLayer] world loaded: " + world.toString());
+				worlds.add(world);
+				log.info("[RuneLayer] world loaded: " + world);
 			}
 		}
 	}
 	
 	private void loadConfig() {
 		// see if the value exists
-		if (!propertyExists("worlds")) {
-			// query and get list of worlds on the server
+		if (!config.contains("worlds")) {
 			List<World> tempWorlds = Bukkit.getServer().getWorlds();
-				
-			// add the worlds names to the list
-			for (World world: tempWorlds) {
-				if (world != null) {
-					String name = world.getName();
-					worlds.add(name);
+			for (World world : tempWorlds) {
+				if(world != null) {
+					worlds.add(world.getName());
 				}
 			}
-			
-			// save this to the config file
-			conf.setProperty("worlds", worlds);
+			config.set("worlds", worlds);
 		}
-		conf.save();
-	}
-	
-	private boolean propertyExists(String path) {
-		return this.getConfiguration().getProperty(path) != null;
+		saveConfig();
 	}
 	
 	private void load_players() {
